@@ -6,7 +6,6 @@
 
 console.log('Launching…');
 
-var exec = require('child_process').exec;
 var meta = require('./package.json');
 var express = require('express');
 var compression = require('compression');
@@ -21,6 +20,7 @@ var Job = require('./lib/job');
 var Orchestrator = require('./lib/orchestrator');
 var RequestState = require('./lib/request-state');
 var SpecberusWrapper = require('./lib/specberus-wrapper');
+var mailer = require('./lib/mailer');
 
 var passport = require('passport');
 var LdapAuth = require('ldapauth-fork');
@@ -146,25 +146,13 @@ var processRequest = function (req, res, isTar) {
       },
       requests[id].results
     ).then(function (state) {
-      var cmd = global.SENDMAIL + ' ' + state.get('status').toUpperCase() +
-        ' ' + global.MAILING_LIST;
-
-      if (state.get('status') === Orchestrator.STATUS_ERROR ||
-          state.get('status') === Orchestrator.STATUS_FAILURE) {
-        cmd += ' ' + (url || tar.originalname) + ' \'' +
-               JSON.stringify(requests[id], null, 2).replace(/'/g, '\\\'') +
-               '\'';
-      }
-      else {
-        cmd += ' ' + state.get('metadata').get('thisVersion') +
-          ' \'Echidna:   ' + meta.version +
-          '\nSpecberus: ' + SpecberusWrapper.version +
-          '\nJob ID:    ' + id +
-          '\nDecision:  ' + decision + '\'';
-      }
-
       console.log('[' + state.get('status').toUpperCase() + '] ' + url);
-      exec(cmd, function (err, _, stderr) { if (err) console.error(stderr); });
+      mailer.sendMessage(
+        id,
+        state,
+        JSON.stringify(requests[id], null, 2).replace(/'/g, '\\\''),
+        url || tar.originalname
+      );
       dumpJobResult(argResultLocation + path.sep + id + '.json', requests[id]);
     }).done();
 
